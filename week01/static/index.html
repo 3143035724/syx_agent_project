@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>StreamingAgentGateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #0f1412;
+      --ink: #e7f0ea;
+      --muted: #8aa396;
+      --line: #2a3a33;
+      --accent: #3dd68c;
+      --accent-dim: #1f6b4a;
+      --warn: #e8b86d;
+      --danger: #e07868;
+      --info: #6db7e8;
+      --panel: rgba(23, 32, 28, 0.88);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: "IBM Plex Sans", sans-serif;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1d3a2d 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #243528 0%, transparent 45%),
+        linear-gradient(160deg, var(--bg0), #121916 50%, #0c100e);
+    }
+
+    .shell {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+      display: grid;
+      gap: 20px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 4vw, 2.4rem);
+      letter-spacing: -0.03em;
+      font-weight: 600;
+    }
+    header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .chip {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+    }
+    .chip strong { color: var(--accent); font-weight: 500; }
+
+    .status-board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    @media (max-width: 720px) {
+      .status-board { grid-template-columns: 1fr; }
+    }
+    .status-item label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .status-item .value {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+      color: var(--ink);
+      word-break: break-all;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 20px;
+    }
+    .conn-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .conn-dot.idle { background: var(--muted); }
+    .conn-dot.connecting, .conn-dot.reconnecting { background: var(--warn); box-shadow: 0 0 0 4px rgba(232,184,109,.15); }
+    .conn-dot.connected { background: var(--accent); box-shadow: 0 0 0 4px rgba(61,214,140,.15); }
+    .conn-dot.disconnected, .conn-dot.error { background: var(--danger); }
+
+    .composer, .reconnect-box {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    label.field {
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    textarea, input[type="text"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0d1210;
+      color: var(--ink);
+      padding: 12px 14px;
+      font: 15px/1.5 "IBM Plex Sans", sans-serif;
+      outline: none;
+    }
+    input[type="text"] {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 13px;
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    textarea:focus, input[type="text"]:focus { border-color: var(--accent-dim); }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      border: 0;
+      cursor: pointer;
+      font: 500 14px/1 "IBM Plex Sans", sans-serif;
+      padding: 12px 16px;
+      transition: transform .15s ease, opacity .15s ease, background .15s ease;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #062315; }
+    .btn-primary:hover:not(:disabled) { background: #55e09c; }
+    .btn-ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .btn-info {
+      background: transparent;
+      color: var(--info);
+      border: 1px solid #2c4a5a;
+    }
+    .btn-danger {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid #5a322c;
+    }
+
+    .activity {
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px dashed var(--line);
+      padding-top: 10px;
+      line-height: 1.45;
+    }
+    .activity strong { color: var(--ink); font-weight: 500; }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 16px;
+      min-height: 340px;
+    }
+    @media (max-width: 800px) {
+      .stage { grid-template-columns: 1fr; }
+    }
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      min-height: 340px;
+    }
+    .panel-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+      margin-right: 8px;
+    }
+    .status-dot.running, .status-dot.creating, .status-dot.stopping { background: var(--warn); }
+    .status-dot.completed { background: var(--accent); }
+    .status-dot.failed, .status-dot.stopped, .status-dot.not_found { background: var(--danger); }
+
+    #output {
+      flex: 1;
+      margin: 0;
+      padding: 16px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 14px/1.65 "IBM Plex Sans", sans-serif;
+      overflow: auto;
+    }
+    #events {
+      flex: 1;
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      font: 12px/1.5 "JetBrains Mono", monospace;
+      color: var(--muted);
+    }
+    .event-card {
+      padding: 10px 0;
+      border-bottom: 1px dashed #243029;
+    }
+    .event-card .t { color: var(--accent); }
+    .event-card .answer {
+      margin-top: 8px;
+      padding: 10px;
+      background: #0d1210;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font: 13px/1.55 "IBM Plex Sans", sans-serif;
+    }
+    .event-card pre.payload {
+      margin: 8px 0 0;
+      padding: 8px;
+      background: #0a0f0d;
+      border: 1px solid #1c2922;
+      color: #9bb5a6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .banner {
+      display: none;
+      padding: 12px 14px;
+      border: 1px solid #5a4a28;
+      background: rgba(232, 184, 109, 0.08);
+      color: var(--warn);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .banner.show { display: block; }
+    .banner code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      color: var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>StreamingAgentGateway</h1>
+      <p>创建新 Run、按 RunID 重连 SSE、取消当前任务；顶部实时显示连接状态与页面行为。</p>
+      <div class="meta">
+        <div class="chip">model <strong id="modelName">-</strong></div>
+        <div class="chip">adapter <strong id="adapterName">-</strong></div>
+        <div class="chip">health <strong id="health">...</strong></div>
+      </div>
+      <div class="banner" id="echoBanner">
+        当前为 <strong>EchoAdapter</strong>。请设置 <code>DEEPSEEK_API_KEY</code> 后重启服务以使用真实模型。
+      </div>
+    </header>
+
+    <section class="status-board" aria-live="polite">
+      <div class="status-item">
+        <label>连接状态</label>
+        <div class="value"><span class="conn-dot idle" id="connDot"></span><span id="connText">idle</span></div>
+      </div>
+      <div class="status-item">
+        <label>当前页面行为</label>
+        <div class="value" id="actionText">待命</div>
+      </div>
+      <div class="status-item">
+        <label>当前 RunID</label>
+        <div class="value" id="currentRunText">-</div>
+      </div>
+    </section>
+
+    <section class="composer">
+      <label class="field" for="prompt">新建对话</label>
+      <textarea id="prompt" placeholder="例如：用一句话介绍 DeepSeek"></textarea>
+      <div class="actions">
+        <button class="btn-primary" id="btnSend" type="button">创建并订阅</button>
+        <button class="btn-danger" id="btnStop" type="button" disabled>取消当前 Run</button>
+        <button class="btn-ghost" id="btnClear" type="button">清空展示</button>
+      </div>
+      <div class="activity">Run 状态：<strong id="statusText">idle</strong></div>
+    </section>
+
+    <section class="reconnect-box">
+      <label class="field" for="reconnectId">重连已有 RunID</label>
+      <input id="reconnectId" type="text" placeholder="例如 run_a5a6b2c1cc91" autocomplete="off" />
+      <div class="actions">
+        <button class="btn-info" id="btnReconnect" type="button">重连并订阅 SSE</button>
+        <button class="btn-ghost" id="btnFetch" type="button">仅拉取状态</button>
+      </div>
+      <div class="activity" id="hintText">可粘贴历史 run_id，恢复输出与事件流（服务重启后内存 Run 会丢失）。</div>
+    </section>
+
+    <section class="stage">
+      <div class="panel">
+        <div class="panel-head">
+          <span><span class="status-dot" id="statusDot"></span><span id="statusText2">idle</span></span>
+          <span>完整回答</span>
+        </div>
+        <pre id="output">等待输入…</pre>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>SSE events</span><span id="eventCount">0</span></div>
+        <div id="events"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const els = {
+      prompt: document.getElementById("prompt"),
+      reconnectId: document.getElementById("reconnectId"),
+      send: document.getElementById("btnSend"),
+      stop: document.getElementById("btnStop"),
+      clear: document.getElementById("btnClear"),
+      reconnect: document.getElementById("btnReconnect"),
+      fetch: document.getElementById("btnFetch"),
+      output: document.getElementById("output"),
+      events: document.getElementById("events"),
+      eventCount: document.getElementById("eventCount"),
+      statusDot: document.getElementById("statusDot"),
+      statusText: document.getElementById("statusText"),
+      statusText2: document.getElementById("statusText2"),
+      modelName: document.getElementById("modelName"),
+      adapterName: document.getElementById("adapterName"),
+      health: document.getElementById("health"),
+      echoBanner: document.getElementById("echoBanner"),
+      connDot: document.getElementById("connDot"),
+      connText: document.getElementById("connText"),
+      actionText: document.getElementById("actionText"),
+      currentRunText: document.getElementById("currentRunText"),
+      hintText: document.getElementById("hintText"),
+    };
+
+    const state = {
+      runId: null,
+      source: null,
+      eventCount: 0,
+      lastEventKey: "",
+      connection: "idle",
+      action: "待命",
+      runStatus: "idle",
+      intentionalClose: false,
+    };
+
+    function setConnection(conn) {
+      state.connection = conn;
+      els.connText.textContent = conn;
+      els.connDot.className = "conn-dot " + conn;
+    }
+
+    function setAction(action) {
+      state.action = action;
+      els.actionText.textContent = action;
+    }
+
+    function setRunId(runId) {
+      state.runId = runId || null;
+      els.currentRunText.textContent = runId || "-";
+      if (runId) {
+        els.reconnectId.value = runId;
+        const url = new URL(window.location.href);
+        url.searchParams.set("run_id", runId);
+        history.replaceState(null, "", url);
+      }
+    }
+
+    function setRunStatus(status) {
+      const s = status || "idle";
+      state.runStatus = s;
+      els.statusText.textContent = s;
+      els.statusText2.textContent = s;
+      els.statusDot.className = "status-dot " + s;
+    }
+
+    function setBusy(busy) {
+      els.send.disabled = busy;
+      els.reconnect.disabled = busy;
+      els.fetch.disabled = busy;
+      els.stop.disabled = !state.runId || ["completed", "stopped", "failed", "not_found", "idle"].includes(state.runStatus);
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function eventKey(obj) {
+      return JSON.stringify({
+        type: obj.type,
+        status: obj.status,
+        output: obj.output,
+        error: obj.error,
+        run_id: obj.run_id,
+      });
+    }
+
+    function buildEventCardHtml(obj) {
+      const type = obj.type || "?";
+      const status = obj.status ? ` · ${obj.status}` : "";
+      let body = `<div><span class="t">${type}</span>${status}</div>`;
+      if (typeof obj.output === "string" && obj.output.length) {
+        body += `<div class="answer">${escapeHtml(obj.output)}</div>`;
+      } else if (obj.error) {
+        body += `<div class="answer">错误: ${escapeHtml(obj.error)}</div>`;
+      } else if (obj.input) {
+        body += `<div class="answer">input: ${escapeHtml(obj.input)}</div>`;
+      }
+      body += `<pre class="payload">${escapeHtml(JSON.stringify(obj, null, 2))}</pre>`;
+      return body;
+    }
+
+    function appendEvent(obj) {
+      const key = eventKey(obj);
+      if (key === state.lastEventKey) return;
+
+      // 连续多个 run.get + running：合并成一张卡片，避免刷屏
+      const first = els.events.firstElementChild;
+      const isRunningGet = obj.type === "run.get" && obj.status === "running";
+      if (isRunningGet && first && first.dataset && first.dataset.kind === "running") {
+        state.lastEventKey = key;
+        first.innerHTML = buildEventCardHtml(obj);
+        first.dataset.kind = "running";
+        return;
+      }
+
+      state.lastEventKey = key;
+      state.eventCount += 1;
+      els.eventCount.textContent = String(state.eventCount);
+
+      const card = document.createElement("div");
+      card.className = "event-card";
+      if (isRunningGet) card.dataset.kind = "running";
+      card.innerHTML = buildEventCardHtml(obj);
+      els.events.prepend(card);
+    }
+
+    function renderAnswer(data) {
+      if (!data) return;
+      if (data.error) {
+        els.output.textContent = `错误: ${data.error}`;
+        return;
+      }
+      if (typeof data.output === "string") {
+        els.output.textContent = data.output.length ? data.output : "（模型未返回文本）";
+      }
+    }
+
+    function isTerminal(status) {
+      return ["completed", "stopped", "failed", "not_found", "already_terminal"].includes(status);
+    }
+
+    function applyEvent(data, { log = true } = {}) {
+      if (!data) return;
+      if (log) appendEvent(data);
+      if (data.run_id) setRunId(data.run_id);
+      if (data.status) setRunStatus(data.status);
+      renderAnswer(data);
+      if (isTerminal(data.status)) {
+        setBusy(false);
+        els.stop.disabled = true;
+      } else if (["running", "created", "stopping"].includes(data.status)) {
+        els.stop.disabled = false;
+      }
+    }
+
+    function closeStream({ intentional = true } = {}) {
+      state.intentionalClose = intentional;
+      if (state.source) {
+        state.source.close();
+        state.source = null;
+      }
+      if (intentional) {
+        setConnection(state.runId ? "disconnected" : "idle");
+      }
+    }
+
+    async function fetchRun(runId) {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}`);
+      return res.json();
+    }
+
+    async function syncRun(runId, { log = false } = {}) {
+      try {
+        const data = await fetchRun(runId);
+        applyEvent(data, { log });
+        return data;
+      } catch (e) {
+        setAction("拉取状态失败: " + e);
+        return null;
+      }
+    }
+
+    function subscribeSSE(runId, { mode = "subscribe" } = {}) {
+      closeStream({ intentional: true });
+      setConnection(mode === "reconnect" ? "reconnecting" : "connecting");
+      setAction(mode === "reconnect" ? `正在重连 ${runId}` : `正在订阅 ${runId}`);
+
+      const source = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
+      state.source = source;
+      state.intentionalClose = false;
+
+      const onPayload = (ev) => {
+        let data;
+        try { data = JSON.parse(ev.data); } catch { return; }
+        applyEvent(data);
+        if (isTerminal(data.status)) {
+          setAction(`Run 已结束（${data.status}）`);
+          setConnection("disconnected");
+          closeStream({ intentional: true });
+        }
+      };
+
+      source.onopen = () => {
+        setConnection("connected");
+        setAction(mode === "reconnect" ? `已重连并监听 ${runId}` : `SSE 已连接，监听 ${runId}`);
+        els.stop.disabled = isTerminal(state.runStatus);
+      };
+
+      source.onmessage = onPayload;
+      ["run.create", "run.get", "run.stop"].forEach((name) => {
+        source.addEventListener(name, onPayload);
+      });
+
+      source.onerror = async () => {
+        if (state.intentionalClose) return;
+        closeStream({ intentional: false });
+        setConnection("disconnected");
+        setAction("SSE 断开，正在同步最终状态…");
+        const latest = await syncRun(runId, { log: false });
+        if (latest && isTerminal(latest.status)) {
+          setAction(`连接结束，最终状态 ${latest.status}`);
+        } else if (latest && latest.status === "not_found") {
+          setAction("Run 不存在或服务已重启（内存丢失）");
+          setRunStatus("not_found");
+        } else {
+          setAction("连接中断，可点击「重连并订阅 SSE」重试");
+        }
+        setBusy(false);
+      };
+    }
+
+    async function createAndSubscribe() {
+      const input = els.prompt.value.trim();
+      if (!input) {
+        els.prompt.focus();
+        setAction("请先输入内容");
+        return;
+      }
+
+      closeStream({ intentional: true });
+      state.lastEventKey = "";
+      setBusy(true);
+      els.stop.disabled = false;
+      els.output.textContent = "生成中…";
+      setRunStatus("creating");
+      setAction("正在创建 Run…");
+      setConnection("connecting");
+
+      try {
+        const res = await fetch("/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input }),
+        });
+        const created = await res.json();
+        if (!res.ok) throw new Error(created.error || "create failed");
+
+        setRunId(created.run_id);
+        appendEvent(created);
+        setRunStatus("running");
+        setAction(`已创建 ${created.run_id}，准备订阅`);
+
+        // 先静默同步，避免与 SSE 再各记一条 running
+        await syncRun(created.run_id, { log: false });
+        if (isTerminal(state.runStatus)) {
+          // 终态补记一条完整事件
+          const latest = await fetchRun(created.run_id);
+          applyEvent(latest, { log: true });
+          setConnection("disconnected");
+          setAction(`Run 已快速结束（${state.runStatus}）`);
+          setBusy(false);
+          return;
+        }
+        subscribeSSE(created.run_id, { mode: "subscribe" });
+      } catch (err) {
+        els.output.textContent = String(err);
+        setRunStatus("failed");
+        setConnection("error");
+        setAction("创建失败: " + err);
+        setBusy(false);
+      }
+    }
+
+    async function reconnectExisting() {
+      const runId = els.reconnectId.value.trim();
+      if (!runId) {
+        els.reconnectId.focus();
+        setAction("请填写要重连的 RunID");
+        return;
+      }
+
+      closeStream({ intentional: true });
+      state.lastEventKey = "";
+      setBusy(true);
+      setRunId(runId);
+      setAction(`正在查询 ${runId}…`);
+      setConnection("reconnecting");
+
+      const latest = await syncRun(runId, { log: true });
+      if (!latest) {
+        setConnection("error");
+        setBusy(false);
+        return;
+      }
+      if (latest.status === "not_found") {
+        setAction("未找到该 RunID（可能服务已重启）");
+        setConnection("disconnected");
+        setBusy(false);
+        els.stop.disabled = true;
+        return;
+      }
+
+      els.hintText.innerHTML = `已载入 <strong>${runId}</strong>，状态 <strong>${latest.status}</strong>`;
+      if (isTerminal(latest.status)) {
+        setConnection("disconnected");
+        setAction(`Run 已结束（${latest.status}），仅展示快照；无需保持 SSE`);
+        setBusy(false);
+        els.stop.disabled = true;
+        return;
+      }
+
+      els.stop.disabled = false;
+      subscribeSSE(runId, { mode: "reconnect" });
+      setBusy(false);
+    }
+
+    async function fetchOnly() {
+      const runId = els.reconnectId.value.trim() || state.runId;
+      if (!runId) {
+        setAction("没有可查询的 RunID");
+        return;
+      }
+      setAction(`仅拉取 ${runId} 状态…`);
+      const latest = await syncRun(runId, { log: true });
+      if (latest) {
+        setRunId(runId);
+        setAction(`已拉取 ${runId} → ${latest.status}`);
+      }
+    }
+
+    async function cancelCurrentRun() {
+      if (!state.runId) {
+        setAction("当前没有 Run 可取消");
+        return;
+      }
+      els.stop.disabled = true;
+      setAction(`正在取消 ${state.runId}…`);
+      setRunStatus("stopping");
+      try {
+        const res = await fetch(`/api/runs/${encodeURIComponent(state.runId)}/stop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "web_cancel" }),
+        });
+        const data = await res.json();
+        appendEvent(data);
+        if (data.status === "stopping") {
+          setAction(`已请求取消 ${state.runId}，等待终态…`);
+          await syncRun(state.runId, { log: true });
+        } else if (data.status === "already_terminal") {
+          setAction("Run 已处于终态，无需取消");
+          setBusy(false);
+        } else if (data.status === "not_found") {
+          setAction("取消失败：Run 不存在");
+          setRunStatus("not_found");
+          setBusy(false);
+        }
+      } catch (err) {
+        setAction("取消请求失败: " + err);
+        els.stop.disabled = false;
+      }
+    }
+
+    function clearView() {
+      closeStream({ intentional: true });
+      state.lastEventKey = "";
+      state.eventCount = 0;
+      els.eventCount.textContent = "0";
+      els.events.innerHTML = "";
+      els.output.textContent = "等待输入…";
+      setRunId(null);
+      setRunStatus("idle");
+      setConnection("idle");
+      setAction("已清空展示");
+      setBusy(false);
+      els.stop.disabled = true;
+      els.hintText.textContent = "可粘贴历史 run_id，恢复输出与事件流（服务重启后内存 Run 会丢失）。";
+      const url = new URL(window.location.href);
+      url.searchParams.delete("run_id");
+      history.replaceState(null, "", url);
+    }
+
+    async function refreshHealth() {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        els.modelName.textContent = data.model;
+        els.adapterName.textContent = data.adapter;
+        els.health.textContent = data.ok ? "ok" : "bad";
+        els.echoBanner.classList.toggle("show", data.adapter === "EchoAdapter");
+      } catch (e) {
+        els.health.textContent = "offline";
+        setConnection("error");
+        setAction("后端不可达");
+      }
+    }
+
+    els.send.addEventListener("click", createAndSubscribe);
+    els.stop.addEventListener("click", cancelCurrentRun);
+    els.clear.addEventListener("click", clearView);
+    els.reconnect.addEventListener("click", reconnectExisting);
+    els.fetch.addEventListener("click", fetchOnly);
+    els.prompt.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") createAndSubscribe();
+    });
+    els.reconnectId.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") reconnectExisting();
+    });
+
+    (async function boot() {
+      setConnection("idle");
+      setAction("页面已加载，待命");
+      await refreshHealth();
+      const params = new URLSearchParams(window.location.search);
+      const runId = params.get("run_id");
+      if (runId) {
+        els.reconnectId.value = runId;
+        setAction(`检测到 URL 中的 run_id，自动重连…`);
+        await reconnectExisting();
+      }
+    })();
+  </script>
+</body>
+</html>
