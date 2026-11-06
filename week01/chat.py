@@ -1,5 +1,4 @@
-# 进入虚拟环境：source ../.venv/bin/activate
-# export DEEPSEEK_API_KEY="sk-66a3f8da54bb48fdb96d5c78e11e6337"
+
 import os
 
 from openai import OpenAI
